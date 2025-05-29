@@ -28,7 +28,7 @@ class OoO{
 
         int         **ROB;
         int         **ISQueue;
-        int         **RMT;
+        int         RMT[67][2] = {0};
         int         ARF_size = 67;
         int         ROB_head = 0;
         int         ROB_tail = 0;
@@ -36,6 +36,7 @@ class OoO{
         int         **FE_reg;
         int         **DE_reg;
         int         **RN_reg;
+        int         **RN_reg_after_rename;
 
         bool        RN_Change = true;
         bool        FE_empty = true;
@@ -84,6 +85,8 @@ class OoO{
                     RN_empty = false;
                     DE_empty = true;
                     RN_Change = true;
+                    TimeArray[DE_reg[i][0]][9] = cycle;
+                    TimeArray[DE_reg[i][0]][10] = 1;
                 }
                 else{
                     for(int j = 0; j < 5; j++){
@@ -97,30 +100,75 @@ class OoO{
         else{
             for(int i = 0; i < width; i++){
                 if(RN_Valid[i]){
-                    TimeArray[RN_reg[i][0]][8]++;       // Sus
-                    RN_Change = false
+                    TimeArray[RN_reg[i][0]][10]++;       // Sus
+                    RN_Change = false;
                 }
             }
         }
 
-        // If Rename stage has new value from Decode stage, then update the ROB
+        // If Rename stage has new value from Decode stage and the value is valid, then update the ROB
+
+        //         ROB                  RMT
+        // -------------------    ---------------
+        // | dst | rdy | pc |     | V | ROB tag |
+        // -------------------    ---------------
+
+        //          RN_reg
+        // --------------------------------
+        // | pc | op_type | dst | src1 | src2 |
+        // --------------------------------
+
+        // --------------------------------
+        // | Rename | ROB | RMT |
+        // --------------------------------
+        // ROB_tail: point to the empty position in ROB
+
+        //    RN_reg_after_rename
+        // --------------------------------
+        // | pc | op_type | dst | A/R src1 | A/R src2 |
+        // --------------------------------
         if(RN_Change){
+            for(int i = 0; i < width; i++){
+                if(RN_Valid[i]){
+                    ROB[ROB_tail][0] = RN_reg[i][2];
+                    ROB[ROB_tail][1] = 0;
+                    ROB[ROB_tail][2] = RN_reg[i][0];
+
+                    RMT[RN_reg[i][2]][0] = 1;
+                    RMT[RN_reg[i][2]][1] = ROB_tail;
+
+                    RN_reg_after_rename[i][0] = RN_reg[i][0];
+                    RN_reg_after_rename[i][1] = RN_reg[i][1];
+                    RN_reg_after_rename[i][2] = ROB_tail;
+                    RN_reg_after_rename[i][3] = (RMT[RN_reg[i][3]][0] == 1);
+                    RN_reg_after_rename[i][4] = (RMT[RN_reg[i][3]][0] == 1) ? RMT[RN_reg[i][3]][1] : RN_reg[i][3];
+                    RN_reg_after_rename[i][5] = (RMT[RN_reg[i][4]][0] == 1);
+                    RN_reg_after_rename[i][6] = (RMT[RN_reg[i][4]][0] == 1) ? RMT[RN_reg[i][4]][1] : RN_reg[i][4];
+
+                    ROB_tail++;
+                }
+            }
+        }
     }
 
     void Decode(){
         if(DE_empty){
             // When next stage is empty, all the instructions in the current stage are moved to the next stage
             // "Valid" is not equivalent to "Empty" signal
+            // DE_reg
+            // --------------------------------
+            // | pc | op_type | dst | src1 | src2 |
+            // --------------------------------
             for(int i = 0; i < width; i++){
                 if(FE_Valid[i]){
                     for(int j = 0; j < 4; j++){
                         DE_reg[i][j] = FE_reg[i][j];
-                        TimeArray[FE_reg[i][0]][7] = cycle;
-                        TimeArray[FE_reg[i][0]][8] = 1;
                     }
                     DE_Valid[i] = true;
                     DE_empty = false;
                     FE_empty = true;
+                    TimeArray[FE_reg[i][0]][7] = cycle;
+                    TimeArray[FE_reg[i][0]][8] = 1;
                 }
                 else{
                     for(int j = 0; j < 4; j++){
@@ -142,6 +190,10 @@ class OoO{
     void Fetch(
         FILE *FP
     ){
+        // FE_reg
+        // --------------------------------
+        // | pc | op_type | dst | src1 | src2 |
+        // --------------------------------
         if(FE_empty){
             for(int i = 0; i < width; i++){
                 if(fscanf(FP, "%lx %d %d %d %d", &pc, &op_type, &dest, &src1, &src2) != EOF){
@@ -230,19 +282,29 @@ class OoO{
         // Oldest = iq_size;
         ROB = new int*[rob_size];
         ISQueue = new int*[iq_size];
-        RMT = new int*[ARF_size];
 
         int** FE_reg = new int*[width];
-        int** DE_reg = new int*[width];
+        int** DE_reg = new int*[width]; 
+        int** RN_reg = new int*[width];
+        int** RN_reg_after_rename = new int*[width];
         for(int i = 0; i < width; i++){
             FE_reg[i] = new int[5];
             DE_reg[i] = new int[5];
+            RN_reg[i] = new int[5];
+            RN_reg_after_rename[i] = new int[7];
         }
 
         for(int i = 0; i < width; i++){
             for(int j = 0; j < 5; j++){
                 FE_reg[i][j] = 0;
                 DE_reg[i][j] = 0;
+                RN_reg[i][j] = 0;
+            }
+        }
+
+        for(int i = 0; i < width; i++){
+            for(int j = 0; j < 7; j++){
+                RN_reg_after_rename[i][j] = 0;
             }
         }
 
