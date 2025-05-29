@@ -17,6 +17,7 @@ class OoO{
     private:
         uint64_t    pc;
         int         **TimeArray;
+        int         NofLines;
         int         cycle = 0;
 
         int         op_type, dest, src1, src2;
@@ -25,22 +26,31 @@ class OoO{
         int         iq_size;
         int         width;
 
+        int         **ROB;
+        int         **ISQueue;
+        int         **RMT;
+        int         ARF_size = 67;
+        int         ROB_head = 0;
+        int         ROB_tail = 0;
+
         int         **FE_reg;
         int         **DE_reg;
-        int         **RE_reg;
+        int         **RN_reg;
 
-        bool DE_empty = true;
-        bool RE_empty = true;
+        bool        RN_Change = true;
+        bool        FE_empty = true;
+        bool        DE_empty = true;
+        bool        RN_empty = true;
 
-        bool FE_Valid[width];
-        bool DE_Valid[width];
-        bool RN_Valid[width];
-        bool RR_Valid[width];
-        bool DI_Valid[width];
-        bool IS_Valid[width];
-        bool EX_Valid[width];
-        bool WB_Valid[width];
-        bool RT_Valid[width];
+        bool        *FE_Valid;
+        bool        *DE_Valid;
+        bool        *RN_Valid;
+        bool        *RR_Valid;
+        bool        *DI_Valid;
+        bool        *IS_Valid;
+        bool        *EX_Valid;
+        bool        *WB_Valid;
+        bool        *RT_Valid;
         
     public:
         int         CYCLE;
@@ -63,33 +73,41 @@ class OoO{
 
     void RegRead(){}
 
-    void Rename(){}
-
-    void Decode(){
-        if(RE_empty){
+    void Rename(){
+        if(RN_empty){
             for(int i = 0; i < width; i++){
                 if(DE_Valid[i]){
                     for(int j = 0; j < 5; j++){
-                        RE_reg[i][j] = DE_reg[i][j];
+                        RN_reg[i][j] = DE_reg[i][j];
                     }
-                    RE_Valid[i] = true;
+                    RN_Valid[i] = true;
+                    RN_empty = false;
+                    DE_empty = true;
+                    RN_Change = true;
                 }
                 else{
                     for(int j = 0; j < 5; j++){
-                        RE_reg[i][j] = 0;
+                        RN_reg[i][j] = 0;
                     }
-                    RE_Valid[i] = false;
+                    RN_Valid[i] = false;
+                    RN_Change = false;
                 }
             }
         }
         else{
             for(int i = 0; i < width; i++){
-                if(DE_Valid[i]){
-                    TimeArray[DE_reg[i][0]][8]++;
+                if(RN_Valid[i]){
+                    TimeArray[RN_reg[i][0]][8]++;       // Sus
+                    RN_Change = false
                 }
             }
         }
 
+        // If Rename stage has new value from Decode stage, then update the ROB
+        if(RN_Change){
+    }
+
+    void Decode(){
         if(DE_empty){
             // When next stage is empty, all the instructions in the current stage are moved to the next stage
             // "Valid" is not equivalent to "Empty" signal
@@ -97,6 +115,8 @@ class OoO{
                 if(FE_Valid[i]){
                     for(int j = 0; j < 4; j++){
                         DE_reg[i][j] = FE_reg[i][j];
+                        TimeArray[FE_reg[i][0]][7] = cycle;
+                        TimeArray[FE_reg[i][0]][8] = 1;
                     }
                     DE_Valid[i] = true;
                     DE_empty = false;
@@ -110,14 +130,28 @@ class OoO{
                 }
             }
         }
+        else{
+            for(int i = 0; i < width; i++){
+                if(DE_Valid[i]){
+                    TimeArray[DE_reg[i][0]][8]++;
+                }
+            }
+        }
     }
 
-    void Fetch(){
+    void Fetch(
+        FILE *FP
+    ){
         if(FE_empty){
             for(int i = 0; i < width; i++){
                 if(fscanf(FP, "%lx %d %d %d %d", &pc, &op_type, &dest, &src1, &src2) != EOF){
-                    FE_reg[i] = {pc, op_type, dest, src1, src2};
+                    FE_reg[i][0] = pc;
+                    FE_reg[i][1] = op_type;
+                    FE_reg[i][2] = dest;
+                    FE_reg[i][3] = src1;
+                    FE_reg[i][4] = src2;
                     FE_Valid[i] = true;
+
                     TimeArray[pc][0] = pc;
                     TimeArray[pc][1] = op_type;
                     TimeArray[pc][2] = src1;
@@ -127,7 +161,11 @@ class OoO{
                     TimeArray[pc][6] = 1;
                 }
                 else{
-                    FE_reg[i] = {0, 0, 0, 0, 0};
+                    FE_reg[i][0] = 0;
+                    FE_reg[i][1] = 0;
+                    FE_reg[i][2] = 0;
+                    FE_reg[i][3] = 0;
+                    FE_reg[i][4] = 0;
                     FE_Valid[i] = false;
                 }
             }
@@ -189,7 +227,7 @@ class OoO{
             TimeArray[i] = new int[23];
         }
 
-        //oldest = iq_size;
+        // Oldest = iq_size;
         ROB = new int*[rob_size];
         ISQueue = new int*[iq_size];
         RMT = new int*[ARF_size];
@@ -206,6 +244,22 @@ class OoO{
                 FE_reg[i][j] = 0;
                 DE_reg[i][j] = 0;
             }
+        }
+
+        FE_Valid = new bool[width];
+        DE_Valid = new bool[width];
+        RN_Valid = new bool[width];
+        RR_Valid = new bool[width];
+        DI_Valid = new bool[width];
+        IS_Valid = new bool[width];
+        EX_Valid = new bool[width];
+        WB_Valid = new bool[width];
+        RT_Valid = new bool[width];
+
+        for(int i = 0; i < width; i++){
+            FE_Valid[i] = false;
+            DE_Valid[i] = false;
+            RN_Valid[i] = false;
         }
     }
 
