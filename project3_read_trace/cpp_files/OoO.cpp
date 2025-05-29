@@ -42,7 +42,7 @@ class OoO{
         bool        FE_empty = true;
         bool        DE_empty = true;
         bool        RN_empty = true;
-
+        bool        RR_empty = true;
         bool        *FE_Valid;
         bool        *DE_Valid;
         bool        *RN_Valid;
@@ -72,7 +72,13 @@ class OoO{
 
     void Dispatch(){}
 
-    void RegRead(){}
+    void RegRead(){
+        if(RR_empty){
+            for(int i = 0; i < width; i++){
+
+            }
+        }
+    }
 
     void Rename(){
         if(RN_empty){
@@ -148,6 +154,7 @@ class OoO{
                     ROB_tail++;
                 }
             }
+            RN_Change = false;
         }
     }
 
