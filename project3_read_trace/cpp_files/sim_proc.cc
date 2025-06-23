@@ -75,14 +75,14 @@ int main (int argc, char* argv[])
     }
 
     do{
-        OoO.RT();
-        OoO.WB();
-        OoO.EX();
-        OoO.IS();
-        OoO.DI();
-        OoO.RR();
-        OoO.RN();
-        OoO.DE();
+        // OoO.RT();
+        // OoO.WB();
+        // OoO.EX();
+        // OoO.IS();
+        // OoO.DI();
+        // OoO.RR();
+        OoO.Rename();
+        OoO.Decode();
         OoO.Fetch(FP);
         fprintf(debug_fptr, "\n%d\n", OoO.CYCLE-1);
         OoO.PRINT(debug_fptr);

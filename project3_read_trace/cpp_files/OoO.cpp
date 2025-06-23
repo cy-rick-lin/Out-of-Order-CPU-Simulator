@@ -28,10 +28,11 @@ class OoO{
 
         int         **ROB;
         int         **ISQueue;
-        int         RMT[67][2] = {0};
-        int         ARF_size = 67;
+        int         RMT[10][2] = {0};
+        int         ARF_size = 10;
         int         ROB_head = 0;
         int         ROB_tail = 0;
+        bool        ROB_full = 0;
 
         int         **FE_reg;
         int         **DE_reg;
@@ -54,7 +55,7 @@ class OoO{
         bool        *RT_Valid;
         
     public:
-        int         CYCLE;
+        int         CYCLE = 0;
         int         inst_count = 0;
 
 
@@ -81,7 +82,7 @@ class OoO{
     }
 
     void Rename(){
-        if(RN_empty){
+        if(RN_empty & !ROB_full){
             for(int i = 0; i < width; i++){
                 if(DE_Valid[i]){
                     for(int j = 0; j < 5; j++){
@@ -112,17 +113,18 @@ class OoO{
             }
         }
 
-        // If Rename stage has new value from Decode stage and the value is valid, then update the ROB
-
+        // If Rename stage has new value from Decode stage and the value
+        // is valid, then update the ROB
+        // ##############################################################
         //         ROB                  RMT
         // -------------------    ---------------
         // | dst | rdy | pc |     | V | ROB tag |
         // -------------------    ---------------
 
-        //          RN_reg
-        // --------------------------------
+        //               RN_reg
+        // ------------------------------------
         // | pc | op_type | dst | src1 | src2 |
-        // --------------------------------
+        // ------------------------------------
 
         // --------------------------------
         // | Rename | ROB | RMT |
@@ -130,9 +132,9 @@ class OoO{
         // ROB_tail: point to the empty position in ROB
 
         //    RN_reg_after_rename
-        // --------------------------------
-        // | pc | op_type | dst | A/R src1 | A/R src2 |
-        // --------------------------------
+        // ------------------------------------------------
+        // | pc | op_type | dst | A/R | src1 | A/R | src2 |
+        // ------------------------------------------------
         if(RN_Change){
             for(int i = 0; i < width; i++){
                 if(RN_Valid[i]){
@@ -250,6 +252,7 @@ class OoO{
         // 7 fu{0} src{19,-1} dst{3} FE{7,1} DE{8,1} RN{9,1} RR{10,1} DI{11,1} IS{12,2} EX{14,1} WB{15,1} RT{16,6}
         // 8 fu{1} src{0,0} dst{23} FE{8,1} DE{9,1} RN{10,1} RR{11,1} DI{12,1} IS{13,2} EX{15,2} WB{17,1} RT{18,5}
         cycle++;
+        CYCLE = cycle;
         bool valid[10] = {false};
         valid[0] = BitwiseOr(FE_Valid, width);
         valid[1] = BitwiseOr(DE_Valid, width);
@@ -365,13 +368,6 @@ class OoO{
                 fprintf(debug_fptr, "%d    %d\n", RMT[i][0], RMT[i][1]);
             }
 
-            fprintf(debug_fptr, "\nIssue Queue      IS_full: %d       IS_full_FE: %d\n", IS_full, IS_full_FE);
-            fprintf(debug_fptr, "----------------------------------------------------------------------\n");
-            fprintf(debug_fptr, "v   op   dst     rdy1    src1   src1    rdy2    src2    src2    pc\n");
-            for(int i = 0; i < iq_size; i++){
-                fprintf(debug_fptr, "%d   %d    %d       %d       %d      %d       %d       %d       %d       %d\n", ISQueue[i][0], ISQueue[i][1], ISQueue[i][2], ISQueue[i][3], ISQueue[i][4], ISQueue[i][5], ISQueue[i][6], ISQueue[i][7], ISQueue[i][8], ISQueue[i][9]);
-            }
-
             fprintf(debug_fptr, "\nROB\n");
             fprintf(debug_fptr, "-------------------------------\n");
             fprintf(debug_fptr, "dst      rdy     pc\n");
@@ -379,43 +375,51 @@ class OoO{
                 fprintf(debug_fptr, "%d      %d      %d\n", ROB[i][0], ROB[i][1], ROB[i][2]);
             }
 
+            // fprintf(debug_fptr, "\nIssue Queue      IS_full: %d       IS_full_FE: %d\n", IS_full, IS_full_FE);
+            // fprintf(debug_fptr, "\nIssue Queue");
+            // fprintf(debug_fptr, "----------------------------------------------------------------------\n");
+            // fprintf(debug_fptr, "v   op   dst     rdy1    src1   src1    rdy2    src2    src2    pc\n");
+            // for(int i = 0; i < iq_size; i++){
+            //     fprintf(debug_fptr, "%d   %d    %d       %d       %d      %d       %d       %d       %d       %d\n", ISQueue[i][0], ISQueue[i][1], ISQueue[i][2], ISQueue[i][3], ISQueue[i][4], ISQueue[i][5], ISQueue[i][6], ISQueue[i][7], ISQueue[i][8], ISQueue[i][9]);
+            // }
+
             fprintf(debug_fptr, "\nProcessor State\n");
             fprintf(debug_fptr, "--------------------------------------------\n");
             fprintf(debug_fptr, "FE:  v  pc_now  op  dst  src1   src2\n");
-            fprintf(debug_fptr, "     %d     %d     %d    %d     %d      %d\n", Valid[0], FE_reg[0][4], FE_reg[0][0], FE_reg[0][1], FE_reg[0][2], FE_reg[0][3]);
+            fprintf(debug_fptr, "     %d     %d     %d    %d     %d      %d\n", BitwiseOr(FE_Valid, width), FE_reg[0][4], FE_reg[0][0], FE_reg[0][1], FE_reg[0][2], FE_reg[0][3]);
 
             fprintf(debug_fptr, "DE:  v  pc_now  op  dst  src1   src2\n");
-            fprintf(debug_fptr, "     %d     %d     %d    %d     %d      %d\n", Valid[1], DE_reg[0][4], DE_reg[0][0], DE_reg[0][1], DE_reg[0][2], DE_reg[0][3]);
+            fprintf(debug_fptr, "     %d     %d     %d    %d     %d      %d\n", BitwiseOr(DE_Valid, width), DE_reg[0][4], DE_reg[0][0], DE_reg[0][1], DE_reg[0][2], DE_reg[0][3]);
 
-            fprintf(debug_fptr, "RN:  v  pc_now  op  dst  ROB1   src1   ROB2    src2    head    tail    head    tail    ROB_full=%d     ROB_full2=%d\n", ROB_full, ROB_full2);
-            fprintf(debug_fptr, "     %d     %d     %d    %d     %d      %d      %d      %d       %d       %d       %d       %d\n", Valid[2], RN_reg[1][6], RN_reg[1][0], RN_reg[1][1], RN_reg[1][2], RN_reg[1][3], RN_reg[1][4], RN_reg[1][5], head_temp0, tail_temp1, head_temp0, tail_temp2);
+            fprintf(debug_fptr, "RN:  v  pc_now  op  dst  ROB1   src1   ROB2    src2    head    tail     ROB_full=%d\n", ROB_full);
+            fprintf(debug_fptr, "     %d     %d     %d    %d     %d      %d      %d      %d       %d       %d       %d       %d\n", BitwiseOr(RN_Valid, width), RN_reg_after_rename[1][6], RN_reg_after_rename[1][0], RN_reg_after_rename[1][1], RN_reg_after_rename[1][2], RN_reg_after_rename[1][3], RN_reg_after_rename[1][4], RN_reg_after_rename[1][5], ROB_head, ROB_tail);
 
-            fprintf(debug_fptr, "RR:  v  pc_now  op  dst  ROB1   src1   ROB2    src2    protect1:%d%d     protect2:%d%d\n", protect1[0], protect1[1], protect2[0], protect2[1]);
-            fprintf(debug_fptr, "     %d     %d     %d    %d     %d      %d      %d      %d\n", Valid[3], RR_reg[1][6], RR_reg[1][0], RR_reg[1][1], RR_reg[1][2], RR_reg[1][3], RR_reg[1][4], RR_reg[1][5]);
+            // fprintf(debug_fptr, "RR:  v  pc_now  op  dst  ROB1   src1   ROB2    src2    protect1:%d%d     protect2:%d%d\n", protect1[0], protect1[1], protect2[0], protect2[1]);
+            // fprintf(debug_fptr, "     %d     %d     %d    %d     %d      %d      %d      %d\n", Valid[3], RR_reg[1][6], RR_reg[1][0], RR_reg[1][1], RR_reg[1][2], RR_reg[1][3], RR_reg[1][4], RR_reg[1][5]);
 
-            fprintf(debug_fptr, "DI:  v  pc_now  op  dst  ROB1   src1   ROB2    src2\n");
-            fprintf(debug_fptr, "     %d     %d     %d    %d     %d      %d      %d      %d\n", Valid[4], DI_reg[0][6], DI_reg[0][0], DI_reg[0][1], DI_reg[0][2], DI_reg[0][3], DI_reg[0][4], DI_reg[0][5]);
+            // fprintf(debug_fptr, "DI:  v  pc_now  op  dst  ROB1   src1   ROB2    src2\n");
+            // fprintf(debug_fptr, "     %d     %d     %d    %d     %d      %d      %d      %d\n", Valid[4], DI_reg[0][6], DI_reg[0][0], DI_reg[0][1], DI_reg[0][2], DI_reg[0][3], DI_reg[0][4], DI_reg[0][5]);
 
-            fprintf(debug_fptr, "IS:  v  pc_now  op  dst  ROB1   src1   ROB2    src2\n");
-            fprintf(debug_fptr, "     %d     %d     %d    %d     %d      %d      %d      %d\n", Valid[5], IS_reg[0][6], IS_reg[0][0], IS_reg[0][1], IS_reg[0][2], IS_reg[0][3], IS_reg[0][4], IS_reg[0][5]);
+            // fprintf(debug_fptr, "IS:  v  pc_now  op  dst  ROB1   src1   ROB2    src2\n");
+            // fprintf(debug_fptr, "     %d     %d     %d    %d     %d      %d      %d      %d\n", Valid[5], IS_reg[0][6], IS_reg[0][0], IS_reg[0][1], IS_reg[0][2], IS_reg[0][3], IS_reg[0][4], IS_reg[0][5]);
 
-            fprintf(debug_fptr, "\nEX:          1              2              3             4               5\n");
-            fprintf(debug_fptr, "          v  pc  dst     v  pc  dst     v  pc  dst     v  pc  dst     v  pc  dst\n");
-            fprintf(debug_fptr, "simple    %d  %d    %d\n", simple_Valid[0], simple_pc[0], simple_reg[0]);
-            fprintf(debug_fptr, "complex   %d  %d    %d      %d  %d    %d\n", complex_Valid[0][0], complex_pc[0][0], complex_reg[0][0], complex_Valid[0][1], complex_pc[0][1], complex_reg[0][1]);
-            fprintf(debug_fptr, "cache     %d  %d    %d      %d  %d    %d      %d  %d    %d      %d  %d    %d      %d  %d    %d\n", cache_Valid[0][0], cache_pc[0][0], cache_reg[0][0], cache_Valid[0][1], cache_pc[0][1], cache_reg[0][1], cache_Valid[0][2], cache_pc[0][2], cache_reg[0][2], cache_Valid[0][3], cache_pc[0][3], cache_reg[0][3], cache_Valid[0][4], cache_pc[0][4], cache_reg[0][4]);
+            // fprintf(debug_fptr, "\nEX:          1              2              3             4               5\n");
+            // fprintf(debug_fptr, "          v  pc  dst     v  pc  dst     v  pc  dst     v  pc  dst     v  pc  dst\n");
+            // fprintf(debug_fptr, "simple    %d  %d    %d\n", simple_Valid[0], simple_pc[0], simple_reg[0]);
+            // fprintf(debug_fptr, "complex   %d  %d    %d      %d  %d    %d\n", complex_Valid[0][0], complex_pc[0][0], complex_reg[0][0], complex_Valid[0][1], complex_pc[0][1], complex_reg[0][1]);
+            // fprintf(debug_fptr, "cache     %d  %d    %d      %d  %d    %d      %d  %d    %d      %d  %d    %d      %d  %d    %d\n", cache_Valid[0][0], cache_pc[0][0], cache_reg[0][0], cache_Valid[0][1], cache_pc[0][1], cache_reg[0][1], cache_Valid[0][2], cache_pc[0][2], cache_reg[0][2], cache_Valid[0][3], cache_pc[0][3], cache_reg[0][3], cache_Valid[0][4], cache_pc[0][4], cache_reg[0][4]);
 
-            fprintf(debug_fptr, "\nWB:         Valid       dst     pc\n");
-            fprintf(debug_fptr, "Simple      %d            %d      %d\n", WB_Valid[0][0], WB_reg[0][0], WB_pc[0][0]);
-            fprintf(debug_fptr, "complex     %d            %d      %d\n", WB_Valid[0][1], WB_reg[0][1], WB_pc[0][1]);
-            fprintf(debug_fptr, "cache       %d            %d      %d\n", WB_Valid[0][2], WB_reg[0][2], WB_pc[0][2]);
+            // fprintf(debug_fptr, "\nWB:         Valid       dst     pc\n");
+            // fprintf(debug_fptr, "Simple      %d            %d      %d\n", WB_Valid[0][0], WB_reg[0][0], WB_pc[0][0]);
+            // fprintf(debug_fptr, "complex     %d            %d      %d\n", WB_Valid[0][1], WB_reg[0][1], WB_pc[0][1]);
+            // fprintf(debug_fptr, "cache       %d            %d      %d\n", WB_Valid[0][2], WB_reg[0][2], WB_pc[0][2]);
 
-            fprintf(debug_fptr, "\nRT-ROB\n");
-            fprintf(debug_fptr, "-------------------------------\n");
-            fprintf(debug_fptr, "dst      rdy     pc    head: %d    head_pc: %d     head_rdy: %d    head: %d    tail: %d\n", head_temp1, head_pc, head_rdy, head_temp2[0], ROB_tail);
-            for(int i = 0; i < rob_size; i++){
-                fprintf(debug_fptr, "%d      %d      %d\n", ROB[i][0], ROB[i][1], ROB[i][2]);
-            }
+            // fprintf(debug_fptr, "\nRT-ROB\n");
+            // fprintf(debug_fptr, "-------------------------------\n");
+            // fprintf(debug_fptr, "dst      rdy     pc    head: %d    head_pc: %d     head_rdy: %d    head: %d    tail: %d\n", head_temp1, head_pc, head_rdy, head_temp2[0], ROB_tail);
+            // for(int i = 0; i < rob_size; i++){
+            //     fprintf(debug_fptr, "%d      %d      %d\n", ROB[i][0], ROB[i][1], ROB[i][2]);
+            // }
         }
 
         //printf("RT:")
