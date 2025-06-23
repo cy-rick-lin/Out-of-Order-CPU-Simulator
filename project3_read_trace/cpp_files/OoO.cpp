@@ -12,6 +12,9 @@
 #include <bitset>
 #include <cstdio>
 
+// ---------------------- From SPEC ----------------------
+// In general, this spec names a pipeline register based on the stage that it feeds into.
+
 
 class OoO{
     private:
@@ -38,6 +41,7 @@ class OoO{
         int         **DE_reg;
         int         **RN_reg;
         int         **RN_reg_after_rename;
+        int         **RR_reg;
 
         bool        RN_Change = true;
         bool        FE_empty = true;
@@ -76,7 +80,29 @@ class OoO{
     void RegRead(){
         if(RR_empty){
             for(int i = 0; i < width; i++){
-
+                if(RN_Valid[i]){
+                    for(int j = 0; j < 7; j++){
+                        RR_reg[i][j] = RN_reg_after_rename[i][j];
+                    }
+                    RR_Valid[i] = true;
+                    RR_empty = false;
+                    RN_empty = true;
+                    TimeArray[RN_reg_after_rename[i][0]][11] = cycle;
+                    TimeArray[RN_reg_after_rename[i][1]][12] = 1;
+                }
+                else{
+                    for(int j = 0; j < 7; j++){
+                        RR_reg[i][j] = 0;
+                    }
+                    RR_Valid[i] = false;
+                }
+            }
+        }
+        else{
+            for(int i = 0; i < width; i++){
+                if(RR_Valid[i]){
+                    TimeArray[RN_reg_after_rename[i][0]][12]++;
+                }
             }
         }
     }
@@ -107,7 +133,9 @@ class OoO{
         else{
             for(int i = 0; i < width; i++){
                 if(RN_Valid[i]){
-                    TimeArray[RN_reg[i][0]][10]++;       // Sus
+                    // Sus(Probably not sus, as RN_Valid is true, the inst was not going to next stage, so the RN_reg[x][0]
+                    // value is still the last pc, which is the same with RN_after_rename_reg
+                    TimeArray[RN_reg[i][0]][10]++; 
                     RN_Change = false;
                 }
             }
@@ -297,11 +325,13 @@ class OoO{
         int** DE_reg = new int*[width]; 
         int** RN_reg = new int*[width];
         int** RN_reg_after_rename = new int*[width];
+        int** RR_reg = new int*[width];
         for(int i = 0; i < width; i++){
             FE_reg[i] = new int[5];
             DE_reg[i] = new int[5];
             RN_reg[i] = new int[5];
             RN_reg_after_rename[i] = new int[7];
+            RR_reg[i] = new int[7];
         }
 
         for(int i = 0; i < width; i++){
@@ -315,6 +345,7 @@ class OoO{
         for(int i = 0; i < width; i++){
             for(int j = 0; j < 7; j++){
                 RN_reg_after_rename[i][j] = 0;
+                RR_reg[i][j] = 0;
             }
         }
 
