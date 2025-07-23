@@ -15,6 +15,9 @@
 // ---------------------- From SPEC ----------------------
 // In general, this spec names a pipeline register based on the stage that it feeds into.
 
+// 2. I think all values can be found in ROB, no matter when its value is waken up, no need to worry about
+// the naming issue issue.
+
 
 class OoO{
     private:
@@ -35,19 +38,22 @@ class OoO{
         int         ARF_size = 10;
         int         ROB_head = 0;
         int         ROB_tail = 0;
-        bool        ROB_full = 0;
+        bool        ROB_full = false;
+        bool        IS_full = false;
 
         int         **FE_reg;
         int         **DE_reg;
         int         **RN_reg;
         int         **RN_reg_after_rename;
         int         **RR_reg;
+        int         **DI_reg;
 
         bool        RN_Change = true;
         bool        FE_empty = true;
         bool        DE_empty = true;
         bool        RN_empty = true;
         bool        RR_empty = true;
+        bool        DI_empty = true;
         bool        *FE_Valid;
         bool        *DE_Valid;
         bool        *RN_Valid;
@@ -73,9 +79,54 @@ class OoO{
 
     void Execute(){}
 
-    void Issue(){}
+    void Issue(){
+        // if(!IS_full){
+        //     for(int i = 0; i < width; i++){
+        //         if(RR_Valid[i]){
+        //             for(int j = 0; j < iq_size; j++){       // Find valid space 
+        //                 if(ISQueue[j][0] == false){
+        //                     for(int k = 0; k < 7; k++){
+        //                         ISQueue[j][k] = RR_reg[i][k];
+        //                 }
+        //             }
+        //             RR_empty = true;
+        //             TimeArray[RR_reg[i][0]][13] = cycle;
+        //             TimeArray[RR_reg[i][0]][14] = 1;
+        //         }
+                
+        //     }
+        // }
+    }
 
-    void Dispatch(){}
+    void Dispatch(){
+        if(DI_empty){
+            for(int i = 0; i < width; i++){
+                if(RR_Valid[i]){
+                    for(int j = 0; j < 7; j++){
+                        DI_reg[i][j] = RR_reg[i][j];
+                    }
+                    DI_Valid[i] = true;
+                    DI_empty = false;
+                    RR_empty = true;
+                    TimeArray[RR_reg[i][0]][13] = cycle;
+                    TimeArray[RR_reg[i][0]][14] = 1;
+                }
+                else{
+                    for(int j = 0; j < 7; j++){
+                        DI_reg[i][j] = 0;
+                    }
+                    DI_Valid[i] = false;
+                }
+            }
+        }
+        else{
+            for(int i = 0; i < width; i++){
+                if(DI_Valid[i]){
+                    TimeArray[DI_reg[i][0]][14]++;
+                }
+            }
+        }
+    }
 
     void RegRead(){
         if(RR_empty){
@@ -193,9 +244,9 @@ class OoO{
             // When next stage is empty, all the instructions in the current stage are moved to the next stage
             // "Valid" is not equivalent to "Empty" signal
             // DE_reg
-            // --------------------------------
+            // ------------------------------------
             // | pc | op_type | dst | src1 | src2 |
-            // --------------------------------
+            // ------------------------------------
             for(int i = 0; i < width; i++){
                 if(FE_Valid[i]){
                     for(int j = 0; j < 4; j++){
@@ -321,17 +372,20 @@ class OoO{
         ROB = new int*[rob_size];
         ISQueue = new int*[iq_size];
 
-        int** FE_reg = new int*[width];
-        int** DE_reg = new int*[width]; 
-        int** RN_reg = new int*[width];
-        int** RN_reg_after_rename = new int*[width];
-        int** RR_reg = new int*[width];
+        FE_reg = new int*[width];
+        DE_reg = new int*[width]; 
+        RN_reg = new int*[width];
+        RN_reg_after_rename = new int*[width];
+        RR_reg = new int*[width];
+        DI_reg = new int*[width];
         for(int i = 0; i < width; i++){
             FE_reg[i] = new int[5];
             DE_reg[i] = new int[5];
             RN_reg[i] = new int[5];
             RN_reg_after_rename[i] = new int[7];
             RR_reg[i] = new int[7];
+            DI_reg[i] = new int[7];
+            ISQueue[i] = new int[8];
         }
 
         for(int i = 0; i < width; i++){
@@ -346,6 +400,12 @@ class OoO{
             for(int j = 0; j < 7; j++){
                 RN_reg_after_rename[i][j] = 0;
                 RR_reg[i][j] = 0;
+            }
+        }
+
+        for(int i = 0; i < iq_size; i++){
+            for(int j = 0; j < 8; j++){
+                ISQueue[i][j] = 0;
             }
         }
 
