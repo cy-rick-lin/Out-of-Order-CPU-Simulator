@@ -33,13 +33,15 @@ class OoO{
         int         width;
 
         int         **ROB;
-        int         **ISQueue;
+        int         **IS_Queue;
+        int         ISQ_oldest = 0;
         int         RMT[10][2] = {0};
         int         ARF_size = 10;
         int         ROB_head = 0;
         int         ROB_tail = 0;
         bool        ROB_full = false;
         bool        IS_full = false;
+        bool        IS_empty = true;
 
         int         **FE_reg;
         int         **DE_reg;
@@ -47,6 +49,7 @@ class OoO{
         int         **RN_reg_after_rename;
         int         **RR_reg;
         int         **DI_reg;
+        int         **IS_reg;
 
         bool        RN_Change = true;
         bool        FE_empty = true;
@@ -80,22 +83,68 @@ class OoO{
     void Execute(){}
 
     void Issue(){
-        // if(!IS_full){
-        //     for(int i = 0; i < width; i++){
-        //         if(RR_Valid[i]){
-        //             for(int j = 0; j < iq_size; j++){       // Find valid space 
-        //                 if(ISQueue[j][0] == false){
-        //                     for(int k = 0; k < 7; k++){
-        //                         ISQueue[j][k] = RR_reg[i][k];
-        //                 }
-        //             }
-        //             RR_empty = true;
-        //             TimeArray[RR_reg[i][0]][13] = cycle;
-        //             TimeArray[RR_reg[i][0]][14] = 1;
-        //         }
-                
-        //     }
-        // }
+        int ISQ_oldest_temp = ISQ_oldest;
+
+        // Issue up to "width" instructions
+        // Find valid and the oldest instruction in IS_Queue
+        // **********************************************************************
+        //                      IS_reg
+        // ------------------------------------------------
+        // | pc | op_type | dst | A/R | src1 | A/R | src2 |
+        // ------------------------------------------------
+        for(int i = 0; i < width; i++){
+            ISQ_oldest = find_oldest_valid_pc(IS_Queue, iq_size);
+            if(IS_empty = check_IS_empty(ISQ_oldest)){
+                break;
+            }
+
+            if(IS_Queue[ISQ_oldest][5] && IS_Queue[ISQ_oldest][8]){
+                IS_reg[i][0] = IS_Queue[ISQ_oldest][1];
+                IS_reg[i][1] = IS_Queue[ISQ_oldest][2];
+                IS_reg[i][2] = IS_Queue[ISQ_oldest][3];
+                IS_reg[i][3] = IS_Queue[ISQ_oldest][4];
+                IS_reg[i][4] = IS_Queue[ISQ_oldest][6];
+                IS_reg[i][5] = IS_Queue[ISQ_oldest][7];
+                IS_reg[i][6] = IS_Queue[ISQ_oldest][9];
+
+                IS_Queue[ISQ_oldest][0] = false;
+            }
+        }
+
+        // Dispatch mechanism
+        // Dispatch up to "width" instructions
+        // **********************************************************************
+        //                              Issue Queue
+        // ----------------------------------------------------------------------
+        // | v | pc | op_type | dst | A/R | ready1 | src1 | A/R | ready2 | src2 |
+        // ----------------------------------------------------------------------
+        // | 0 | 1  |    2    |  3  |  4  |    5   |   6  |  7  |    8   |   9  |
+        // ----------------------------------------------------------------------
+        IS_full = check_IS_full(IS_Queue, iq_size);
+
+        if(!IS_full){
+            for(int i = 0; i < width; i++){
+                if(DI_Valid[i]){
+                    for(int j = 0; j < iq_size; j++){       // Find space in IS_Queue
+                        if(IS_Queue[j][0] == false){        // If v == 0, then the old instruction is not valid, hence replace
+                            IS_Queue[j][0] = true;          // Set valid
+                            IS_Queue[j][1] = DI_reg[i][0];
+                            IS_Queue[j][2] = DI_reg[i][1];
+                            IS_Queue[j][3] = DI_reg[i][2];
+                            IS_Queue[j][4] = DI_reg[i][3];
+                            IS_Queue[j][5] = (DI_reg[i][3]) ? RMT[DI_reg[i][3]][1] : 1;
+                            IS_Queue[j][6] = DI_reg[i][4];
+                            IS_Queue[j][7] = DI_reg[i][5];
+                            IS_Queue[j][8] = (DI_reg[i][5]) ? RMT[DI_reg[i][5]][1] : 1;
+                            IS_Queue[j][9] = DI_reg[i][6];
+                        }
+                    }
+                    DI_empty = true;
+                    TimeArray[DI_reg[i][0]][15] = cycle;
+                    TimeArray[DI_reg[i][0]][16] = 1;
+                }
+            }
+        }
     }
 
     void Dispatch(){
@@ -108,8 +157,8 @@ class OoO{
                     DI_Valid[i] = true;
                     DI_empty = false;
                     RR_empty = true;
-                    TimeArray[RR_reg[i][0]][13] = cycle;
-                    TimeArray[RR_reg[i][0]][14] = 1;
+                    TimeArray[DI_reg[i][0]][13] = cycle;
+                    TimeArray[DI_reg[i][0]][14] = 1;
                 }
                 else{
                     for(int j = 0; j < 7; j++){
@@ -320,6 +369,49 @@ class OoO{
         }
     }
 
+    int find_oldest_valid_pc(
+        int **array,
+        int size
+    ){
+        int oldest = NofLines + 1;
+
+        for(int i = 0; i < size; i++){
+            if(array[i][1] < oldest && array[i][0] == true){
+                oldest = array[i][1];
+            }
+        }
+        return oldest;
+    }
+
+    bool check_IS_empty(
+        int oldest
+    ){
+        if(oldest == NofLines + 1){
+            return true;
+        }
+        else{
+            return false;
+        }
+    }
+
+    bool check_IS_full(
+        int **array,
+        int size
+    ){
+        int count = 0;
+        for(int i = 0; i < size; i++){
+            if(array[i][0] == true){
+                count++;
+            }
+        }
+        if(count == width){
+            return true;
+        }
+        else{
+            return false;
+        }
+    }
+
     bool AdvanceCycle(){
         // 0 fu{0} src{29,14} dst{-1} FE{0,1} DE{1,1} RN{2,1} RR{3,1} DI{4,1} IS{5,1} EX{6,1} WB{7,1} RT{8,1}
         // 1 fu{2} src{29,-1} dst{14} FE{1,1} DE{2,1} RN{3,1} RR{4,1} DI{5,1} IS{6,1} EX{7,5} WB{12,1} RT{13,1}
@@ -370,7 +462,7 @@ class OoO{
 
         // Oldest = iq_size;
         ROB = new int*[rob_size];
-        ISQueue = new int*[iq_size];
+        IS_Queue = new int*[iq_size];
 
         FE_reg = new int*[width];
         DE_reg = new int*[width]; 
@@ -378,6 +470,7 @@ class OoO{
         RN_reg_after_rename = new int*[width];
         RR_reg = new int*[width];
         DI_reg = new int*[width];
+        IS_reg = new int*[width];
         for(int i = 0; i < width; i++){
             FE_reg[i] = new int[5];
             DE_reg[i] = new int[5];
@@ -385,7 +478,8 @@ class OoO{
             RN_reg_after_rename[i] = new int[7];
             RR_reg[i] = new int[7];
             DI_reg[i] = new int[7];
-            ISQueue[i] = new int[8];
+            IS_Queue[i] = new int[10];
+            IS_reg[i] = new int[7];
         }
 
         for(int i = 0; i < width; i++){
@@ -400,12 +494,14 @@ class OoO{
             for(int j = 0; j < 7; j++){
                 RN_reg_after_rename[i][j] = 0;
                 RR_reg[i][j] = 0;
+                DI_reg[i][j] = 0;
+                IS_reg[i][j] = 0;
             }
         }
 
         for(int i = 0; i < iq_size; i++){
-            for(int j = 0; j < 8; j++){
-                ISQueue[i][j] = 0;
+            for(int j = 0; j < 10; j++){
+                IS_Queue[i][j] = 0;
             }
         }
 
@@ -471,7 +567,7 @@ class OoO{
             // fprintf(debug_fptr, "----------------------------------------------------------------------\n");
             // fprintf(debug_fptr, "v   op   dst     rdy1    src1   src1    rdy2    src2    src2    pc\n");
             // for(int i = 0; i < iq_size; i++){
-            //     fprintf(debug_fptr, "%d   %d    %d       %d       %d      %d       %d       %d       %d       %d\n", ISQueue[i][0], ISQueue[i][1], ISQueue[i][2], ISQueue[i][3], ISQueue[i][4], ISQueue[i][5], ISQueue[i][6], ISQueue[i][7], ISQueue[i][8], ISQueue[i][9]);
+            //     fprintf(debug_fptr, "%d   %d    %d       %d       %d      %d       %d       %d       %d       %d\n", IS_Queue[i][0], IS_Queue[i][1], IS_Queue[i][2], IS_Queue[i][3], IS_Queue[i][4], IS_Queue[i][5], IS_Queue[i][6], IS_Queue[i][7], IS_Queue[i][8], IS_Queue[i][9]);
             // }
 
             fprintf(debug_fptr, "\nProcessor State\n");
