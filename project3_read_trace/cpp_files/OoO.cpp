@@ -34,6 +34,7 @@ class OoO{
 
         int         **ROB;
         int         **IS_Queue;
+        int         ***EX_list;
         int         ISQ_oldest = 0;
         int         RMT[10][2] = {0};
         int         ARF_size = 10;
@@ -75,50 +76,66 @@ class OoO{
     // Method
     //
 
-    void Retire(){
-    }
+    void Retire(){}
 
-    void WriteBack(){}
+    void WriteBack(){
+        // EX_list[i][j][7] = 1, send to wb stage
+    }
 
     void Execute(){
-        
-    }
+        for(int i = 0; i < width; i++){
+            for(int j = 0; j < 5; j++){
+                if(EX_list[i][j][7] != 0)
+                    EX_list[i][j][7]--;
+                else{
+                    // Issue Queue wake-up
+                    // Other wake-up are at WB stage
+                    for(int k = 0; k < iq_size; k++){
+                        if(IS_Queue[k][6] == EX_list[i][j][2] && IS_Queue[k][4] == 1)
+                            IS_Queue[k][5] = 1;
+                        if(IS_Queue[k][9] == EX_list[i][j][2] && IS_Queue[k][7] == 1)
+                            IS_Queue[k][8] = 1;
+                    }                    
+                }
+            }
+        }
 
-    void Issue(){
-        // Issue up to "width" instructions
+        // Issue up to "width" instructions to EX stage
         // Find valid and the oldest instruction in IS_Queue
         // **********************************************************************
-        //                      IS_reg
-        // ------------------------------------------------
-        // | pc | op_type | dst | A/R | src1 | A/R | src2 |
-        // ------------------------------------------------
+        //                       Execution List
+        // ----------------------------------------------------------
+        // | pc | op_type | dst | A/R | src1 | A/R | src2 | Counter |
+        // ----------------------------------------------------------
+        // Counter = 0, which means the instruction is finished or there's no valid instruction at this position
         for(int i = 0; i < width; i++){
             ISQ_oldest = find_oldest_valid_pc(IS_Queue, iq_size);
             IS_empty = check_IS_empty(ISQ_oldest);
 
-            if(IS_empty){
-                for(int j = i; j < width; j++){
-                    for(int k = 0; k < 7; k++){
-                        IS_reg[j][k] = 0;
-                    }
-                    IS_Valid[j] = false;
-                }
+            if(IS_empty)
                 break;
-            }
 
             if(IS_Queue[ISQ_oldest][5] & IS_Queue[ISQ_oldest][8]){
-                IS_reg[i][0] = IS_Queue[ISQ_oldest][1];
-                IS_reg[i][1] = IS_Queue[ISQ_oldest][2];
-                IS_reg[i][2] = IS_Queue[ISQ_oldest][3];
-                IS_reg[i][3] = IS_Queue[ISQ_oldest][4];
-                IS_reg[i][4] = IS_Queue[ISQ_oldest][6];
-                IS_reg[i][5] = IS_Queue[ISQ_oldest][7];
-                IS_reg[i][6] = IS_Queue[ISQ_oldest][9];
+                for(int j = 0; j < 5; j++){
+                    if(EX_list[i][j][7] == 0){
+                        EX_list[i][j][0] = IS_Queue[ISQ_oldest][1];
+                        EX_list[i][j][1] = IS_Queue[ISQ_oldest][2];
+                        EX_list[i][j][2] = IS_Queue[ISQ_oldest][3];
+                        EX_list[i][j][3] = IS_Queue[ISQ_oldest][4];
+                        EX_list[i][j][4] = IS_Queue[ISQ_oldest][6];
+                        EX_list[i][j][5] = IS_Queue[ISQ_oldest][7];
+                        EX_list[i][j][6] = IS_Queue[ISQ_oldest][9];
+                        EX_list[i][j][7] = (IS_Queue[ISQ_oldest][2] == 2) ? IS_Queue[ISQ_oldest][2] : 5;
 
-                IS_Queue[ISQ_oldest][0] = false;
+                        IS_Queue[ISQ_oldest][0] = false;
+                        break;
+                    }
+                }
             }
         }
+    }
 
+    void Issue(){
         // Dispatch mechanism
         // Dispatch up to "width" instructions
         // **********************************************************************
@@ -140,11 +157,11 @@ class OoO{
                             IS_Queue[j][2] = DI_reg[i][1];
                             IS_Queue[j][3] = DI_reg[i][2];
                             IS_Queue[j][4] = DI_reg[i][3];
-                            IS_Queue[j][5] = (DI_reg[i][3]) ? RMT[DI_reg[i][3]][1] : 1;
-                            IS_Queue[j][6] = DI_reg[i][4];
-                            IS_Queue[j][7] = DI_reg[i][5];
-                            IS_Queue[j][8] = (DI_reg[i][5]) ? RMT[DI_reg[i][5]][1] : 1;
-                            IS_Queue[j][9] = DI_reg[i][6];
+                            IS_Queue[j][5] = DI_reg[i][5] ? DI_reg[i][5] : ROB[DI_reg[i][6]][1];
+                            IS_Queue[j][6] = DI_reg[i][6];
+                            IS_Queue[j][7] = DI_reg[i][7];
+                            IS_Queue[j][8] = DI_reg[i][8] ? DI_reg[i][8] : ROB[DI_reg[i][9]][1];
+                            IS_Queue[j][9] = DI_reg[i][9];
                         }
                     }
                     DI_empty = true;
@@ -156,12 +173,24 @@ class OoO{
     }
 
     void Dispatch(){
+        // src1 and src2 can either get value from ROB(after EX update) or ARF
+        // If src1 or src2 get valiue from ROB, directly set rdy1 or rdy2 to 1
+        // **********************************************************************
+        //                              DI_reg
+        // --------------------------------------------------------------
+        // | pc | op_type | dst | A/R | rdy1 | src1 | A/R | rdy2 | src2 |
+        // --------------------------------------------------------------
         if(DI_empty){
             for(int i = 0; i < width; i++){
                 if(RR_Valid[i]){
-                    for(int j = 0; j < 7; j++){
+                    for(int j = 0; j < 9; j++){
                         DI_reg[i][j] = RR_reg[i][j];
                     }
+                    if(DI_reg[i][3] == 1 && ROB[DI_reg[i][5]][1] == 1 || DI_reg[i][3] == 0)
+                        DI_reg[i][4] = 1;
+                    if(DI_reg[i][6] == 1 && ROB[DI_reg[i][8]][1] == 1 || DI_reg[i][6] == 0)
+                        DI_reg[i][7] = 1;
+
                     DI_Valid[i] = true;
                     DI_empty = false;
                     RR_empty = true;
@@ -186,12 +215,24 @@ class OoO{
     }
 
     void RegRead(){
+        // src1 and src2 can either get value from ROB(after EX update) or ARF
+        // If src1 or src2 get valiue from ROB, directly set rdy1 or rdy2 to 1
+        // **********************************************************************
+        //                              RR_reg
+        // --------------------------------------------------------------
+        // | pc | op_type | dst | A/R | rdy1 | src1 | A/R | rdy2 | src2 |
+        // --------------------------------------------------------------
         if(RR_empty){
             for(int i = 0; i < width; i++){
                 if(RN_Valid[i]){
-                    for(int j = 0; j < 7; j++){
+                    for(int j = 0; j < 9; j++){
                         RR_reg[i][j] = RN_reg_after_rename[i][j];
                     }
+                    if(RR_reg[i][3] == 1 && ROB[RR_reg[i][5]][1] == 1 || RR_reg[i][3] == 0)
+                        RR_reg[i][4] = 1;
+                    if(RR_reg[i][6] == 1 && ROB[RR_reg[i][8]][1] == 1 || RR_reg[i][6] == 0)
+                        RR_reg[i][7] = 1;
+
                     RR_Valid[i] = true;
                     RR_empty = false;
                     RN_empty = true;
@@ -268,9 +309,10 @@ class OoO{
         // ROB_tail: point to the empty position in ROB
 
         //    RN_reg_after_rename
-        // ------------------------------------------------
-        // | pc | op_type | dst | A/R | src1 | A/R | src2 |
-        // ------------------------------------------------
+        // --------------------------------------------------------------
+        // | pc | op_type | dst | A/R | rdy1 | src1 | A/R | rdy2 | src2 |
+        // --------------------------------------------------------------
+        // If source is ROB, then set A/R to 1, otherwise set A/R to 0
         if(RN_Change){
             for(int i = 0; i < width; i++){
                 if(RN_Valid[i]){
@@ -285,9 +327,11 @@ class OoO{
                     RN_reg_after_rename[i][1] = RN_reg[i][1];
                     RN_reg_after_rename[i][2] = ROB_tail;
                     RN_reg_after_rename[i][3] = (RMT[RN_reg[i][3]][0] == 1);
-                    RN_reg_after_rename[i][4] = (RMT[RN_reg[i][3]][0] == 1) ? RMT[RN_reg[i][3]][1] : RN_reg[i][3];
-                    RN_reg_after_rename[i][5] = (RMT[RN_reg[i][4]][0] == 1);
-                    RN_reg_after_rename[i][6] = (RMT[RN_reg[i][4]][0] == 1) ? RMT[RN_reg[i][4]][1] : RN_reg[i][4];
+                    RN_reg_after_rename[i][4] = 0;
+                    RN_reg_after_rename[i][5] = (RMT[RN_reg[i][3]][0] == 1) ? RMT[RN_reg[i][3]][1] : RN_reg[i][3];
+                    RN_reg_after_rename[i][6] = (RMT[RN_reg[i][4]][0] == 1);
+                    RN_reg_after_rename[i][7] = 0;
+                    RN_reg_after_rename[i][8] = (RMT[RN_reg[i][4]][0] == 1) ? RMT[RN_reg[i][4]][1] : RN_reg[i][4];
 
                     ROB_tail += (ROB_tail == rob_size-1) ? (-rob_size + 1) : 1;
                 }
@@ -471,6 +515,7 @@ class OoO{
         // Oldest = iq_size;
         ROB = new int*[rob_size];
         IS_Queue = new int*[iq_size];
+        EX_list = new int**[width];
 
         FE_reg = new int*[width];
         DE_reg = new int*[width]; 
@@ -479,15 +524,23 @@ class OoO{
         RR_reg = new int*[width];
         DI_reg = new int*[width];
         IS_reg = new int*[width];
+
         for(int i = 0; i < width; i++){
             FE_reg[i] = new int[5];
             DE_reg[i] = new int[5];
             RN_reg[i] = new int[5];
-            RN_reg_after_rename[i] = new int[7];
+            RN_reg_after_rename[i] = new int[9];
             RR_reg[i] = new int[7];
             DI_reg[i] = new int[7];
             IS_Queue[i] = new int[10];
             IS_reg[i] = new int[7];
+        }
+
+        for(int i = 0; i < width; i++){
+            EX_list[i] = new int*[5];
+            for(int j = 0; j < 5; j++){
+                EX_list[i][j] = new int[5];
+            }
         }
 
         for(int i = 0; i < width; i++){
@@ -500,16 +553,29 @@ class OoO{
 
         for(int i = 0; i < width; i++){
             for(int j = 0; j < 7; j++){
-                RN_reg_after_rename[i][j] = 0;
                 RR_reg[i][j] = 0;
                 DI_reg[i][j] = 0;
                 IS_reg[i][j] = 0;
             }
         }
 
+        for(int i = 0; i < width; i++){
+            for(int j = 0; j < 9; j++){
+                RN_reg_after_rename[i][j] = 0;
+            }
+        }
+
         for(int i = 0; i < iq_size; i++){
             for(int j = 0; j < 10; j++){
                 IS_Queue[i][j] = 0;
+            }
+        }
+
+        for(int i = 0; i < width; i++){
+            for(int j = 0; j < 5; j++){
+                for(int k = 0; k < 5; k++){
+                    EX_list[i][j][k] = 0;
+                }
             }
         }
 
