@@ -80,11 +80,11 @@ class OoO{
 
     void WriteBack(){}
 
-    void Execute(){}
+    void Execute(){
+        
+    }
 
     void Issue(){
-        int ISQ_oldest_temp = ISQ_oldest;
-
         // Issue up to "width" instructions
         // Find valid and the oldest instruction in IS_Queue
         // **********************************************************************
@@ -94,11 +94,19 @@ class OoO{
         // ------------------------------------------------
         for(int i = 0; i < width; i++){
             ISQ_oldest = find_oldest_valid_pc(IS_Queue, iq_size);
-            if(IS_empty = check_IS_empty(ISQ_oldest)){
+            IS_empty = check_IS_empty(ISQ_oldest);
+
+            if(IS_empty){
+                for(int j = i; j < width; j++){
+                    for(int k = 0; k < 7; k++){
+                        IS_reg[j][k] = 0;
+                    }
+                    IS_Valid[j] = false;
+                }
                 break;
             }
 
-            if(IS_Queue[ISQ_oldest][5] && IS_Queue[ISQ_oldest][8]){
+            if(IS_Queue[ISQ_oldest][5] & IS_Queue[ISQ_oldest][8]){
                 IS_reg[i][0] = IS_Queue[ISQ_oldest][1];
                 IS_reg[i][1] = IS_Queue[ISQ_oldest][2];
                 IS_reg[i][2] = IS_Queue[ISQ_oldest][3];
@@ -281,7 +289,7 @@ class OoO{
                     RN_reg_after_rename[i][5] = (RMT[RN_reg[i][4]][0] == 1);
                     RN_reg_after_rename[i][6] = (RMT[RN_reg[i][4]][0] == 1) ? RMT[RN_reg[i][4]][1] : RN_reg[i][4];
 
-                    ROB_tail++;
+                    ROB_tail += (ROB_tail == rob_size-1) ? (-rob_size + 1) : 1;
                 }
             }
             RN_Change = false;
@@ -400,11 +408,11 @@ class OoO{
     ){
         int count = 0;
         for(int i = 0; i < size; i++){
-            if(array[i][0] == true){
+            if(array[i][0] == false){
                 count++;
             }
         }
-        if(count == width){
+        if(count <= width){
             return true;
         }
         else{
