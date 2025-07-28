@@ -80,6 +80,12 @@ class OoO{
 
     void WriteBack(){
         // EX_list[i][j][7] = 1, send to wb stage
+        // for(int i = 0; i < width; i++){
+        //     for(int j = 0; j < 5; j++){
+        //         if(EX_list[i][j][7] == 1){
+
+        //         }
+        // }
     }
 
     void Execute(){
@@ -89,7 +95,7 @@ class OoO{
                     EX_list[i][j][7]--;
                 else{
                     // Issue Queue wake-up
-                    // Other wake-up are at WB stage
+                    // Other wake-up are at WB stage(ROB related)
                     for(int k = 0; k < iq_size; k++){
                         if(IS_Queue[k][6] == EX_list[i][j][2] && IS_Queue[k][4] == 1)
                             IS_Queue[k][5] = 1;
@@ -100,7 +106,7 @@ class OoO{
             }
         }
 
-        // Issue up to "width" instructions to EX stage
+        // Issue up to "width" instructions to FU
         // Find valid and the oldest instruction in IS_Queue
         // **********************************************************************
         //                       Execution List
@@ -115,7 +121,7 @@ class OoO{
             if(IS_empty)
                 break;
 
-            if(IS_Queue[ISQ_oldest][5] & IS_Queue[ISQ_oldest][8]){
+            if(IS_Queue[ISQ_oldest][5] && IS_Queue[ISQ_oldest][8]){
                 for(int j = 0; j < 5; j++){
                     if(EX_list[i][j][7] == 0){
                         EX_list[i][j][0] = IS_Queue[ISQ_oldest][1];
@@ -166,7 +172,12 @@ class OoO{
                     }
                     DI_empty = true;
                     TimeArray[DI_reg[i][0]][15] = cycle;
-                    TimeArray[DI_reg[i][0]][16] = 1;
+                }
+            }
+
+            for(int i = 0; i < width; i++){
+                if(IS_Queue[i][0] == 1){
+                    TimeArray[IS_Queue[i][1]][16]++;
                 }
             }
         }
